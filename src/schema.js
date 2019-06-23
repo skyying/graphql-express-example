@@ -7,6 +7,10 @@ import {
   GraphQLList,
 } from 'graphql';
 
+import { PubSub, withFilter } from 'graphql-subscriptions';
+
+const pubsub = new PubSub(); // create a PubSub instance
+
 const books = [
   { name: 'clean code', id: 0, author_id: 0 },
   { name: 'Refactor', id: 1, author_id: 1 },
@@ -90,7 +94,41 @@ const mutation = new GraphQLObjectType({
         return authors[authors.length - 1];
       },
     },
+    updateAuthor: {
+      type: AuthorType,
+      args: {
+        id: { type: GraphQLID },
+        name: { type: GraphQLString },
+      },
+      resolve(parent, args) {
+        const { name, id } = args;
+        if (!name || !id) {
+          throw Error;
+        }
+        authors[id].name = name;
+        pubsub.publish('updateAuthor', authors[id]);
+        return authors[id];
+      },
+    },
   },
+});
+
+const subscription = new GraphQLObjectType({
+  name: 'Subscription',
+  description: 'Subscription',
+  fields: () => ({
+    updateAuthor: {
+      type: AuthorType,
+      args: {
+        id: { type: GraphQLID },
+      },
+      resolve(payload, args, context, info) {
+        console.log('paylaod', payload);
+        return payload;
+      },
+      subscribe: () => pubsub.asyncIterator('updateAuthor'),
+    },
+  }),
 });
 
 const RootQuery = new GraphQLObjectType({
@@ -125,5 +163,9 @@ const RootQuery = new GraphQLObjectType({
   },
 });
 
-const schema = new GraphQLSchema({ query: RootQuery, mutation });
+const schema = new GraphQLSchema({
+  query: RootQuery,
+  mutation,
+  subscription,
+});
 export default schema;
